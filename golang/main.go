@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -29,7 +30,7 @@ type NodeMetric struct {
 type PodMetric struct {
 	Namespace string `json:"namespace"`
 	Pod       string `json:"pod"`
-	CPU       string `json:"cpu"`
+	CPU       int64  `json:"cpu"`    // Changed to int64 for better precision
 	Memory    string `json:"memory"` // Pode ser convertido para bytes depois
 }
 
@@ -84,8 +85,8 @@ func main() {
 			Addresses: address,
 			Status:    string(node.Status.Conditions[len(node.Status.Conditions)-1].Type),
 			Capacity: map[string]interface{}{
-				"cpu":               node.Status.Capacity.Cpu().String(),
-				"memory":            node.Status.Capacity.Memory().String(),
+				"cpu":               node.Status.Capacity.Cpu().Value(),
+				"memory":            ConvertToBytes(node.Status.Capacity.Memory().String()),
 				"ephemeral-storage": node.Status.Capacity.StorageEphemeral().String(),
 				"pods":              node.Status.Capacity.Pods().Value(),
 			},
@@ -102,11 +103,12 @@ func main() {
 	var podMetrics []PodMetric
 	for _, podMetric := range podMetricsList.Items {
 		for _, container := range podMetric.Containers {
+			cpuValue := container.Usage.Cpu().MilliValue() // Get CPU in millicores
 			podMetrics = append(podMetrics, PodMetric{
 				Namespace: podMetric.Namespace,
 				Pod:       podMetric.Name,
-				CPU:       container.Usage.Cpu().String(),
-				Memory:    container.Usage.Memory().String(),
+				CPU:       cpuValue,
+				Memory:    strconv.FormatInt(ConvertToBytes(container.Usage.Memory().String()), 10),
 			})
 		}
 	}
@@ -144,4 +146,30 @@ func main() {
 	}
 
 	fmt.Println("Métricas salvas em metrics-k8s.json")
+}
+
+// ConvertToBytes converts memory values with units (Ki, Mi, Gi) to bytes
+func ConvertToBytes(value string) int64 {
+	var num int64
+	var unit string
+
+	// Try to parse value with unit
+	if n, err := fmt.Sscanf(value, "%d%s", &num, &unit); err == nil && n == 2 {
+		switch unit {
+		case "Ki":
+			return num * 1024 // 1 KiB = 1024 bytes
+		case "Mi":
+			return num * 1024 * 1024 // 1 MiB = 1024 * 1024 bytes
+		case "Gi":
+			return num * 1024 * 1024 * 1024 // 1 GiB = 1024 * 1024 * 1024 bytes
+		}
+	}
+
+	// Try to parse plain number (already in bytes)
+	if n, err := strconv.ParseInt(value, 10, 64); err == nil {
+		return n
+	}
+
+	// Return 0 if parsing fails
+	return 0
 }
