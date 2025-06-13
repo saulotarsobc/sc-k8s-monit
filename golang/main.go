@@ -23,7 +23,7 @@ type NodeMetric struct {
 	NodeInfo   map[string]string      `json:"nodeInfo"`
 	Addresses  string                 `json:"addresses"`
 	Status     string                 `json:"status"`
-	Capacity   map[string]interface{} `json:"capacity"`
+	Capacity   map[string]any         `json:"capacity"`
 	Conditions []corev1.NodeCondition `json:"conditions"`
 }
 
@@ -31,7 +31,7 @@ type PodMetric struct {
 	Namespace string `json:"namespace"`
 	Pod       string `json:"pod"`
 	CPU       int64  `json:"cpu"`
-	Memory    string `json:"memory"`
+	Memory    int64  `json:"memory"`
 }
 
 type Result struct {
@@ -79,13 +79,13 @@ func main() {
 		}
 		nodeMetrics = append(nodeMetrics, NodeMetric{
 			Name:      node.Name,
-			NodeInfo:  map[string]string{"kubeletVersion": node.Status.NodeInfo.KubeletVersion}, // ajustar conforme necessário
+			NodeInfo:  map[string]string{"kubeletVersion": node.Status.NodeInfo.KubeletVersion},
 			Addresses: address,
 			Status:    string(node.Status.Conditions[len(node.Status.Conditions)-1].Type),
-			Capacity: map[string]interface{}{
+			Capacity: map[string]any{
 				"cpu":               node.Status.Capacity.Cpu().Value(),
 				"memory":            ConvertToBytes(node.Status.Capacity.Memory().String()),
-				"ephemeral-storage": node.Status.Capacity.StorageEphemeral().String(),
+				"ephemeral-storage": ConvertToBytes(node.Status.Capacity.StorageEphemeral().String()),
 				"pods":              node.Status.Capacity.Pods().Value(),
 			},
 			Conditions: node.Status.Conditions,
@@ -105,7 +105,7 @@ func main() {
 				Namespace: podMetric.Namespace,
 				Pod:       podMetric.Name,
 				CPU:       cpuValue,
-				Memory:    strconv.FormatInt(ConvertToBytes(container.Usage.Memory().String()), 10),
+				Memory:    ConvertToBytes(container.Usage.Memory().String()),
 			})
 		}
 	}
@@ -126,6 +126,8 @@ func main() {
 		PodMetrics: podMetrics,
 		Namespaces: namespaces,
 	}
+
+	fmt.Printf("%+v\n", result)
 
 	file, err := os.Create("metrics-k8s.json")
 	if err != nil {
