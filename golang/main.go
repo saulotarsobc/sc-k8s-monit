@@ -30,8 +30,8 @@ type NodeMetric struct {
 type PodMetric struct {
 	Namespace string `json:"namespace"`
 	Pod       string `json:"pod"`
-	CPU       int64  `json:"cpu"`    // Changed to int64 for better precision
-	Memory    string `json:"memory"` // Pode ser convertido para bytes depois
+	CPU       int64  `json:"cpu"`
+	Memory    string `json:"memory"`
 }
 
 type Result struct {
@@ -42,7 +42,6 @@ type Result struct {
 }
 
 func main() {
-	// Constrói a configuração a partir do kubeconfig local
 	kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		clientcmd.NewDefaultClientConfigLoadingRules(),
 		&clientcmd.ConfigOverrides{},
@@ -64,7 +63,6 @@ func main() {
 
 	ctx := context.Background()
 
-	// Coleta dos nodes
 	nodes, err := clientset.CoreV1().Nodes().List(ctx, v1.ListOptions{})
 	if err != nil {
 		log.Fatalf("Erro ao obter nós: %v", err)
@@ -94,7 +92,6 @@ func main() {
 		})
 	}
 
-	// Coleta de métricas dos pods
 	podMetricsList, err := metricsClient.MetricsV1beta1().PodMetricses("").List(ctx, v1.ListOptions{})
 	if err != nil {
 		log.Fatalf("Erro ao obter métricas dos pods: %v", err)
@@ -103,7 +100,7 @@ func main() {
 	var podMetrics []PodMetric
 	for _, podMetric := range podMetricsList.Items {
 		for _, container := range podMetric.Containers {
-			cpuValue := container.Usage.Cpu().MilliValue() // Get CPU in millicores
+			cpuValue := container.Usage.Cpu().MilliValue()
 			podMetrics = append(podMetrics, PodMetric{
 				Namespace: podMetric.Namespace,
 				Pod:       podMetric.Name,
@@ -113,7 +110,6 @@ func main() {
 		}
 	}
 
-	// Coleta dos namespaces
 	nsList, err := clientset.CoreV1().Namespaces().List(ctx, v1.ListOptions{})
 	if err != nil {
 		log.Fatalf("Erro ao obter namespaces: %v", err)
@@ -124,7 +120,6 @@ func main() {
 		namespaces = append(namespaces, ns.Name)
 	}
 
-	// Monta resultado final
 	result := Result{
 		Timestamp:  time.Now().Format(time.RFC3339),
 		Nodes:      nodeMetrics,
@@ -132,7 +127,6 @@ func main() {
 		Namespaces: namespaces,
 	}
 
-	// Salva em JSON
 	file, err := os.Create("metrics-k8s.json")
 	if err != nil {
 		log.Fatalf("Erro ao criar arquivo JSON: %v", err)
